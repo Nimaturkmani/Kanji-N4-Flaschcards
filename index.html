@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KT's Kanji N4 Elite</title>
+    <style>
+        :root {
+            --easy: #d4edda; --mid: #fff3cd; --hard: #f8d7da;
+            --easy-dark: #28a745; --mid-dark: #ffc107; --hard-dark: #dc3545;
+        }
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; overflow-x: hidden; }
+        
+        /* Time & Header */
+        .header { text-align: center; margin-bottom: 10px; width: 100%; position: relative; }
+        .timer-box { position: absolute; top: 0; right: 10px; background: #333; color: #fff; padding: 5px 12px; border-radius: 15px; font-size: 12px; font-family: monospace; }
+        
+        .stats { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; justify-content: center; }
+        .stat-box { padding: 8px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; border: 2px solid transparent; font-size: 13px; transition: 0.2s; }
+        .stat-box.active { border-color: #333; transform: scale(1.05); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        
+        .mode-toggle { margin-bottom: 15px; padding: 10px 20px; border-radius: 20px; border: 2px solid #007bff; background: white; color: #007bff; font-weight: bold; cursor: pointer; }
+        
+        /* Flashcard */
+        .card-container { width: 340px; height: 380px; perspective: 1000px; margin-bottom: 10px; z-index: 2; }
+        .card { width: 100%; height: 100%; position: relative; transition: transform 0.5s; transform-style: preserve-3d; cursor: pointer; }
+        .card.flipped { transform: rotateY(180deg); }
+        .card-face { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 20px; box-shadow: 0 6px 15px rgba(0,0,0,0.1); padding: 25px; box-sizing: border-box; text-align: center; background: white; border: 1px solid #ddd; }
+        .card-back { transform: rotateY(180deg); background: #fdfdfd; }
+        
+        .display-main { font-size: 80px; margin: 0; color: #222; font-weight: bold; }
+        .display-sub { font-size: 28px; font-weight: bold; color: #333; margin: 10px 0; }
+        .label { font-size: 10px; text-transform: uppercase; color: #aaa; margin-top: 10px; }
+        .reading { font-size: 16px; color: #444; margin-bottom: 8px; line-height: 1.4; }
+        
+        /* Nav & Sort */
+        .nav-row { display: flex; gap: 15px; margin-bottom: 15px; width: 340px; }
+        .nav-btn { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; background: white; cursor: pointer; }
+        .sort-row { display: flex; gap: 8px; width: 340px; }
+        .sort { flex: 1; padding: 15px 5px; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; color: white; font-size: 14px; }
+        .btn-easy { background: var(--easy-dark); }
+        .btn-mid { background: var(--mid-dark); color: #333; }
+        .btn-hard { background: var(--hard-dark); }
+        
+        /* FX & Animations */
+        #fx-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 999; }
+        .kiss-emoji { position: fixed; font-size: 100px; animation: kissAnim 1.5s forwards; pointer-events: none; z-index: 1000; opacity: 0; }
+        @keyframes kissAnim {
+            0% { transform: scale(0.5) translateY(0); opacity: 0; }
+            50% { transform: scale(1.2) translateY(-50px); opacity: 1; }
+            100% { transform: scale(1) translateY(-100px); opacity: 0; }
+        }
+
+        .reset { margin-top: 30px; font-size: 12px; color: #999; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<canvas id="fx-canvas"></canvas>
+
+<div class="header">
+    <div class="timer-box">Time <span id="time-display">00:00:00</span></div>
+    <h1>KT's Kanji N4 Study</h1>
+    <p id="progress-text" style="font-size: 14px; color: #666;">Bereit für das nächste Level?</p>
+</div>
+
+<div class="stats">
+    <div id="stat-all" class="stat-box active" onclick="filterCards('all')" style="background: #e9ecef;">Inbox (<span id="count-all">0</span>)</div>
+    <div id="stat-easy" class="stat-box" onclick="filterCards('easy')" style="background: var(--easy);">Easy (<span id="count-easy">0</span>)</div>
+    <div id="stat-mid" class="stat-box" onclick="filterCards('mid')" style="background: var(--mid);">Mid (<span id="count-mid">0</span>)</div>
+    <div id="stat-hard" class="stat-box" onclick="filterCards('hard')" style="background: var(--hard);">Hard (<span id="count-hard">0</span>)</div>
+</div>
+
+<button class="mode-toggle" onclick="toggleMode()">
+    Modus: <span id="current-mode">Kanji → Deutsch</span>
+</button>
+
+<div class="card-container">
+    <div class="card" id="kanjiCard" onclick="this.classList.toggle('flipped')">
+        <div class="card-face card-front">
+            <div class="display-main" id="q-main">-</div>
+            <div style="margin-top: 20px; font-size: 10px; color: #ccc;">UMDREHEN</div>
+        </div>
+        <div class="card-face card-back">
+            <div class="label" id="label-top">Lesungen</div>
+            <div class="reading" id="display-readings">-</div>
+            <div style="width: 50px; height: 2px; background: #eee; margin: 15px auto;"></div>
+            <div class="display-sub" id="a-main">-</div>
+        </div>
+    </div>
+</div>
+
+<div class="nav-row">
+    <button class="nav-btn" onclick="moveIndex(-1)">← Vorherige</button>
+    <button class="nav-btn" onclick="moveIndex(1)">Nächste →</button>
+</div>
+
+<div class="sort-row">
+    <button class="sort btn-hard" onclick="sortCurrent('hard')">Hard</button>
+    <button class="sort btn-mid" onclick="sortCurrent('mid')">Mid</button>
+    <button class="sort btn-easy" onclick="sortCurrent('easy')">Easy</button>
+</div>
+
+<div class="reset" onclick="resetApp()">Session-Reset</div>
+
+<script>
+    // --- Datenbank (gekürzt für Code-Vorschau, alle 167 sind aktiv) ---
+    const fullData = [{k:"会", o:"kai", ku:"a(u)", m:"Treffen"},{k:"同", o:"dou", ku:"onaji", m:"Gleich"},{k:"事", o:"ji", ku:"koto", m:"Sache"},{k:"自", o:"ji, shi", ku:"mizuka(ra)", m:"Selbst"},{k:"社", o:"sha", ku:"yashiro", m:"Firma"},{k:"発", o:"hatsu", ku:"-", m:"Abfahrt"},{k:"者", o:"sha", ku:"mono", m:"Person"},{k:"地", o:"chi, ji", ku:"-", m:"Erde"},{k:"業", o:"gyou", ku:"waza", m:"Geschäft"},{k:"方", o:"hou", ku:"kata", m:"Richtung"},{k:"新", o:"shin", ku:"atara(shii)", m:"Neu"},{k:"場", o:"jou", ku:"ba", m:"Ort"},{k:"員", o:"in", ku:"-", m:"Mitglied"},{k:"立", o:"ritsu", ku:"ta(tsu)", m:"Stehen"},{k:"開", o:"kai", ku:"hira(ku)", m:"Öffnen"},{k:"手", o:"shu", ku:"te", m:"Hand"},{k:"力", o:"ryoku", ku:"chikara", m:"Kraft"},{k:"問", o:"mon", ku:"to(u)", m:"Frage"},{k:"代", o:"dai", ku:"ka(wari)", m:"Ersatz"},{k:"明", o:"mei", ku:"aka(rui)", m:"Hell"},{k:"動", o:"dou", ku:"ugo(ku)", m:"Bewegen"},{k:"京", o:"kyou", ku:"miyako", m:"Hauptstadt"},{k:"目", o:"moku", ku:"me", m:"Auge"},{k:"通", o:"tsuu", ku:"too(ru)", m:"Verkehr"},{k:"言", o:"gen", ku:"i(u)", m:"Sagen"},{k:"理", o:"ri", ku:"-", m:"Logik"},{k:"体", o:"tai", ku:"karada", m:"Körper"},{k:"田", o:"den", ku:"ta", m:"Reisfeld"},{k:"主", o:"shu", ku:"nushi", m:"Herr"},{k:"題", o:"dai", ku:"-", m:"Thema"},{k:"意", o:"i", ku:"-", m:"Idee"},{k:"不", o:"fu", ku:"-", m:"Nicht-"},{k:"作", o:"saku", ku:"tsuku(ru)", m:"Machen"},{k:"用", o:"you", ku:"mochi(iru)", m:"Nutzen"},{k:"度", o:"do", ku:"tabi", m:"Grad"},{k:"強", o:"kyou", ku:"tsuyo(i)", m:"Stark"},{k:"公", o:"kou", ku:"-", m:"Öffentlich"},{k:"持", o:"ji", ku:"mo(tsu)", m:"Halten"},{k:"野", o:"ya", ku:"no", m:"Feld"},{k:"以", o:"i", ku:"mo(tte)", m:"Mittels"},{k:"思", o:"shi", ku:"omo(u)", m:"Denken"},{k:"家", o:"ka", ku:"ie", m:"Haus"},{k:"世", o:"sei", ku:"yo", m:"Welt"},{k:"多", o:"ta", ku:"oo(i)", m:"Viele"},{k:"正", o:"sei", ku:"tada(shii)", m:"Richtig"},{k:"安", o:"an", ku:"yasu(i)", m:"Billig"},{k:"院", o:"in", ku:"-", m:"Institut"},{k:"心", o:"shin", ku:"kokoro", m:"Herz"},{k:"界", o:"kai", ku:"-", m:"Welt"},{k:"教", o:"kyou", ku:"oshi(eru)", m:"Lehren"},{k:"文", o:"bun", ku:"fumi", m:"Satz"},{k:"元", o:"gen", ku:"moto", m:"Ursprung"},{k:"重", o:"juu", ku:"omo(i)", m:"Schwer"},{k:"近", o:"kin", ku:"chika(i)", m:"Nah"},{k:"考", o:"kou", ku:"kanga(eru)", m:"Denken"},{k:"画", o:"ga", ku:"-", m:"Bild"},{k:"海", o:"kai", ku:"umi", m:"Meer"},{k:"売", o:"bai", ku:"u(ru)", m:"Verkaufen"},{k:"知", o:"chi", ku:"shi(ru)", m:"Wissen"},{k:"道", o:"dou", ku:"michi", m:"Weg"},{k:"集", o:"shuu", ku:"atsu(meru)", m:"Sammeln"},{k:"別", o:"betsu", ku:"waka(reru)", m:"Trennen"},{k:"物", o:"butsu", ku:"mono", m:"Ding"},{k:"使", o:"shi", ku:"tsuka(u)", m:"Nutzen"},{k:"品", o:"hin", ku:"shina", m:"Waren"},{k:"計", o:"kei", ku:"haka(ru)", m:"Plan"},{k:"死", o:"shi", ku:"shi(nu)", m:"Tod"},{k:"特", o:"toku", ku:"-", m:"Spezial"},{k:"私", o:"shi", ku:"watashi", m:"Ich"},{k:"始", o:"shi", ku:"haji(meru)", m:"Beginnen"},{k:"朝", o:"chou", ku:"asa", m:"Morgen"},{k:"運", o:"un", ku:"hako(bu)", m:"Tragen"},{k:"終", o:"shuu", ku:"o(waru)", m:"Ende"},{k:"台", o:"dai", ku:"utena", m:"Gestell"},{k:"広", o:"kou", ku:"hiro(i)", m:"Weit"},{k:"住", o:"juu", ku:"su(mu)", m:"Wohnen"},{k:"無", o:"mu", ku:"na(i)", m:"Nichts"},{k:"真", o:"shin", ku:"ma", m:"Wahr"},{k:"有", o:"yuu", ku:"a(ru)", m:"Haben"},{k:"口", o:"kou", ku:"kuchi", m:"Mund"},{k:"少", o:"shou", ku:"suku(nai)", m:"Wenig"},{k:"町", o:"chou", ku:"machi", m:"Stadt"},{k:"料", o:"ryou", ku:"-", m:"Gebühr"},{k:"工", o:"kou", ku:"-", m:"Bau"},{k:"建", o:"ken", ku:"ta(teru)", m:"Bauen"},{k:"空", o:"kuu", ku:"sora", m:"Himmel"},{k:"急", o:"kyuu", ku:"iso(gu)", m:"Eilig"},{k:"止", o:"shi", ku:"to(maru)", m:"Stopp"},{k:"送", o:"sou", ku:"oku(ru)", m:"Senden"},{k:"切", o:"setsu", ku:"ki(ru)", m:"Schneiden"},{k:"転", o:"ten", ku:"koro(garu)", m:"Drehen"},{k:"研", o:"ken", ku:"to(gu)", m:"Studium"},{k:"足", o:"soku", ku:"ashi", m:"Fuß"},{k:"究", o:"kyuu", ku:"-", m:"Forschung"},{k:"楽", o:"gaku", ku:"tano(shii)", m:"Musik"},{k:"起", o:"ki", ku:"o(kiru)", m:"Aufstehen"},{k:"着", o:"chaku", ku:"ki(ru)", m:"Ankunft"},{k:"店", o:"ten", ku:"mise", m:"Laden"},{k:"病", o:"byou", ku:"ya(mu)", m:"Krank"},{k:"質", o:"shitsu", ku:"tachi", m:"Qualität"},{k:"待", o:"tai", ku:"ma(tsu)", m:"Warten"},{k:"試", o:"shi", ku:"tame(su)", m:"Testen"},{k:"族", o:"zoku", ku:"-", m:"Familie"},{k:"銀", o:"gin", ku:"-", m:"Silber"},{k:"早", o:"sou", ku:"haya(i)", m:"Früh"},{k:"映", o:"ei", ku:"utsu(ru)", m:"Reflektieren"},{k:"親", o:"shin", ku:"oya", m:"Eltern"},{k:"験", o:"ken", ku:"-", m:"Prüfung"},{k:"英", o:"ei", ku:"-", m:"England"},{k:"医", o:"i", ku:"-", m:"Arzt"},{k:"仕", o:"shi", ku:"-", m:"Dienen"},{k:"去", o:"kyo", ku:"sa(ru)", m:"Vergangen"},{k:"味", o:"mi", ku:"aji", m:"Geschmack"},{k:"写", o:"sha", ku:"utsuru", m:"Kopieren"},{k:"字", o:"ji", ku:"-", m:"Zeichen"},{k:"答", o:"tou", ku:"kota(eru)", m:"Antwort"},{k:"夜", o:"ya", ku:"yoru", m:"Nacht"},{k:"音", o:"on", ku:"oto", m:"Ton"},{k:"注", o:"chuu", ku:"soso(gu)", m:"Fokus"},{k:"帰", o:"ki", ku:"kae(ru)", m:"Heimkehr"},{k:"古", o:"ko", ku:"furu(i)", m:"Alt"},{k:"歌", o:"ka", ku:"uta", m:"Lied"},{k:"买", o:"bai", ku:"ka(u)", m:"Kaufen"},{k:"悪", o:"aku", ku:"waru(i)", m:"Schlecht"},{k:"図", o:"zu", ku:"haka(ru)", m:"Karte"},{k:"週", o:"shuu", ku:"-", m:"Woche"},{k:"室", o:"shitsu", ku:"muro", m:"Raum"},{k:"歩", o:"ho", ku:"aru(ku)", m:"Gehen"},{k:"風", o:"fuu", ku:"kaze", m:"Wind"},{k:"紙", o:"shi", ku:"kami", m:"Papier"},{k:"黒", o:"koku", ku:"kuro", m:"Schwarz"},{k:"花", o:"ka", ku:"hana", m:"Blume"},{k:"春", o:"shun", ku:"haru", m:"Frühling"},{k:"赤", o:"seki", ku:"aka(i)", m:"Rot"},{k:"青", o:"sei", ku:"ao(i)", m:"Blau"},{k:"馆", o:"kan", ku:"yakata", m:"Gebäude"},{k:"屋", o:"oku", ku:"ya", m:"Dach"},{k:"色", o:"shoku", ku:"iro", m:"Farbe"},{k:"走", o:"sou", ku:"hashi(ru)", m:"Rennen"},{k:"秋", o:"shuu", ku:"aki", m:"Herbst"},{k:"夏", o:"ka", ku:"natsu", m:"Sommer"},{k:"习", o:"shuu", ku:"nara(u)", m:"Lernen"},{k:"駅", o:"eki", ku:"-", m:"Station"},{k:"洋", o:"you", ku:"-", m:"Ozean"},{k:"旅", o:"ryo", ku:"tabi", m:"Reise"},{k:"服", o:"fuku", ku:"-", m:"Kleidung"},{k:"夕", o:"-", ku:"yuu", m:"Abend"},{k:"借", o:"shaku", ku:"ka(riru)", m:"Leihen"},{k:"曜", o:"you", ku:"-", m:"Wochentag"},{k:"飲", o:"in", ku:"no(mu)", m:"Trinken"},{k:"肉", o:"niku", ku:"-", m:"Fleisch"},{k:"貸", o:"tai", ku:"ka(su)", m:"Leihen"},{k:"堂", o:"dou", ku:"-", m:"Halle"},{k:"鳥", o:"chou", ku:"tori", m:"Vogel"},{k:"飯", o:"han", ku:"meshi", m:"Essen"},{k:"勉", o:"ben", ku:"tsuto(meru)", m:"Eifer"},{k:"冬", o:"tou", ku:"fuyu", m:"Winter"},{k:"昼", o:"chuu", ku:"hiru", m:"Mittag"},{k:"茶", o:"cha", ku:"-", m:"Tee"},{k:"弟", o:"tei", ku:"otouto", m:"Bruder (-)"},{k:"牛", o:"gyuu", ku:"ushi", m:"Kuh"},{k:"魚", o:"gyo", ku:"sakana", m:"Fisch"},{k:"兄", o:"kyou", ku:"ani", m:"Bruder (+)"},{k:"犬", o:"ken", ku:"inu", m:"Hund"},{k:"妹", o:"mai", ku:"imouto", m:"Schwester (-)"},{k:"姉", o:"shi", ku:"ane", m:"Schwester (+)"},{k:"漢", o:"kan", ku:"-", m:"Kanji"}];
+
+    // --- State & Storage ---
+    let userProgress = JSON.parse(localStorage.getItem('ktN4Save')) || {};
+    let totalSeconds = parseInt(localStorage.getItem('ktTime')) || 0;
+    let currentCategory = 'all';
+    let currentIndex = 0;
+    let mode = 'JtoD';
+
+    // --- Timer Logic ---
+    setInterval(() => {
+        totalSeconds++;
+        localStorage.setItem('ktTime', totalSeconds);
+        const hrs = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+        const mins = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+        const secs = String(totalSeconds % 60).padStart(2, '0');
+        document.getElementById('time-display').innerText = `${hrs}:${mins}:${secs}`;
+    }, 1000);
+
+    // --- Reward Logic (Fireworks & Kiss) ---
+    function triggerReward() {
+        const kiss = document.createElement('div');
+        kiss.className = 'kiss-emoji';
+        kiss.innerText = '💋';
+        kiss.style.left = (window.innerWidth / 2 - 50) + 'px';
+        kiss.style.top = (window.innerHeight / 2) + 'px';
+        document.body.appendChild(kiss);
+        
+        // Simple Firework effect on Canvas
+        const canvas = document.getElementById('fx-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        for(let i=0; i<50; i++) {
+            ctx.fillStyle = `hsl(${Math.random()*360}, 100%, 50%)`;
+            ctx.beginPath();
+            ctx.arc(Math.random()*canvas.width, Math.random()*canvas.height, 5, 0, Math.PI*2);
+            ctx.fill();
+        }
+        
+        setTimeout(() => {
+            kiss.remove();
+            ctx.clearRect(0,0, canvas.width, canvas.height);
+        }, 1500);
+    }
+
+    // --- Core App Logic ---
+    function getList() {
+        if (currentCategory === 'all') return fullData.filter(i => !userProgress[i.k]);
+        return fullData.filter(i => userProgress[i.k] === currentCategory);
+    }
+
+    function updateDisplay() {
+        const list = getList();
+        const card = document.getElementById('kanjiCard');
+        card.classList.remove('flipped');
+
+        // Stats
+        const counts = { all:0, easy:0, mid:0, hard:0 };
+        fullData.forEach(i => { if(userProgress[i.k]) counts[userProgress[i.k]]++; else counts.all++; });
+        document.getElementById('count-all').innerText = counts.all;
+        document.getElementById('count-easy').innerText = counts.easy;
+        document.getElementById('count-mid').innerText = counts.mid;
+        document.getElementById('count-hard').innerText = counts.hard;
+
+        if (list.length === 0) {
+            document.getElementById('q-main').innerText = "🎌";
+            document.getElementById('a-main').innerText = "Leer!";
+            return;
+        }
+
+        if (currentIndex >= list.length) currentIndex = 0;
+        if (currentIndex < 0) currentIndex = list.length - 1;
+
+        const item = list[currentIndex];
+        if (mode === 'JtoD') {
+            document.getElementById('q-main').innerText = item.k;
+            document.getElementById('q-main').style.fontSize = "90px";
+            document.getElementById('display-readings').innerText = `${item.o} / ${item.ku}`;
+            document.getElementById('a-main').innerText = item.m;
+        } else {
+            document.getElementById('q-main').innerText = item.m;
+            document.getElementById('q-main').style.fontSize = "35px";
+            document.getElementById('display-readings').innerText = `${item.o} / ${item.ku}`;
+            document.getElementById('a-main').innerText = item.k;
+        }
+        document.getElementById('progress-text').innerText = `N4: ${currentIndex + 1} / ${list.length}`;
+    }
+
+    function sortCurrent(level) {
+        const list = getList();
+        if (list.length === 0) return;
+        
+        const kanji = list[currentIndex].k;
+        userProgress[kanji] = level;
+        localStorage.setItem('ktN4Save', JSON.stringify(userProgress));
+
+        // Check for Easy Reward (jede 10er Marke)
+        if (level === 'easy') {
+            const easyCount = Object.values(userProgress).filter(v => v === 'easy').length;
+            if (easyCount > 0 && easyCount % 10 === 0) {
+                triggerReward();
+            }
+        }
+        updateDisplay();
+    }
+
+    function toggleMode() {
+        mode = (mode === 'JtoD') ? 'DtoJ' : 'JtoD';
+        document.getElementById('current-mode').innerText = mode === 'JtoD' ? "Kanji → Deutsch" : "Deutsch → Kanji";
+        updateDisplay();
+    }
+
+    function moveIndex(dir) { currentIndex += dir; updateDisplay(); }
+    
+    function filterCards(cat) {
+        currentCategory = cat; currentIndex = 0;
+        document.querySelectorAll('.stat-box').forEach(b => b.classList.remove('active'));
+        document.getElementById(`stat-${cat}`).classList.add('active');
+        updateDisplay();
+    }
+
+    function resetApp() {
+        if(confirm("KT, Fortschritt & Zeit löschen?")) {
+            localStorage.clear();
+            location.reload();
+        }
+    }
+
+    updateDisplay();
+</script>
+
+</body>
+</html>
